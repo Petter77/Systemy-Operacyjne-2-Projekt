@@ -7,6 +7,9 @@ private:
 public:
   SpinlockLock() = default;
   ~SpinlockLock() = default;
+  SpinlockLock(const SpinlockLock&) = delete;
+  SpinlockLock& operator=(const SpinlockLock&) = delete;
+
   void Lock();
   void Unlock();
 };

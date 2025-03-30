@@ -1,4 +1,4 @@
-#include "../include/SpinlockLock.h"
+#include "../include/spinlocklock.h"
 #include <thread>
 
 void SpinlockLock::Lock(){
