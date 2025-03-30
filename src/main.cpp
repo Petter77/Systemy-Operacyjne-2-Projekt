@@ -109,23 +109,51 @@ void PhilosophersLife(int id, int num_philosophers, std::vector<SpinlockLock>& f
 }
 
 int main(int argc, char **argv){
-  if(argc != 2){
-    std::cerr <<  "Error: Program requires one argument\n"
-      "Correct usage: ./MyProgram <number of philosophers>\n";
-    return 1;
-  }
-  if(!CheckIfArgumentIsNumber(argv[1])){
-    std::cerr <<  "Error: Argument is not a valid number\n"
-      "Integer type number required\n";
-    return 1;
-  }
-  const int num_philosophers = std::stoi(argv[1]);
-  if(num_philosophers < 2){
-    std::cerr <<  "Error: The required number must be 2 or more\n";
+  if (argc < 2 || argc > 3) {
+    std::cerr << "Error: Program requires one or two arguments\n"
+      << "Correct usage: " << argv[0] << " <num_philosophers> [simulation_seconds]\n"
+      << "  num_philosophers: (Required) Number of philosophers (>= 2)\n"
+      << "  simulation_seconds: (Optional) Duration of the simulation in seconds (default: 30)\n";
     return 1;
   }
 
+  if (!CheckIfArgumentIsNumber(argv[1])) {
+    std::cerr << "Error: First argument (num_philosophers) is not a valid number.\n";
+    return 1;
+  }
+  int num_philosophers = 0;
+  try {
+    num_philosophers = std::stoi(argv[1]);
+  } catch (const std::exception& e) {
+    std::cerr << "Error parsing num_philosophers: " << e.what() << std::endl;
+    return 1;
+  }
+  if (num_philosophers < 2) {
+    std::cerr << "Error: Number of philosophers must be 2 or more.\n";
+    return 1;
+  }
+  int simulation_duration_seconds = 30;
+  if (argc == 3) {
+    if (!CheckIfArgumentIsNumber(argv[2])) {
+      std::cerr << "Error: Second argument (simulation_seconds) is not a valid number.\n";
+      return 1;
+    }
+    try {
+      simulation_duration_seconds = std::stoi(argv[2]);
+    } catch (const std::exception& e) {
+      std::cerr << "Error parsing simulation_seconds: " << e.what() << std::endl;
+      return 1;
+    }
+    if (simulation_duration_seconds <= 0) {
+      std::cerr << "Error: Simulation duration must be a positive number of seconds.\n";
+      return 1;
+    }
+  }
+  auto simulation_duration = std::chrono::seconds(simulation_duration_seconds);
+
   std::cout << "Initializing " << num_philosophers << " philosophers...\n";
+  std::cout << "Simulation duration: " << simulation_duration_seconds << " seconds.\n"; 
+
   std::vector<SpinlockLock> forks(num_philosophers);
   std::vector<std::thread> philosophers;
   philosophers.reserve(num_philosophers);
@@ -153,16 +181,16 @@ int main(int argc, char **argv){
 
   std::cout << "Starting UI...\n";
   auto simulation_start_time = std::chrono::steady_clock::now();
-  auto simulation_duration = std::chrono::seconds(30);
 
-  while (std::chrono::steady_clock::now() - simulation_start_time < simulation_duration) {
+  while (std::chrono::steady_clock::now() - simulation_start_time < simulation_duration) { 
     std::cout << "\033[2J\033[H";
 
     std::cout << "--- Dining Philosophers Status ("
       << std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::steady_clock::now() - simulation_start_time).count()
       << "s / "
-      << simulation_duration.count() << "s) ---\n";
+      << simulation_duration.count() 
+      << "s) ---\n";
     std::cout << std::setw(4) << "ID" << " | "
       << std::setw(10) << "Status" << " | "
       << std::setw(7) << "Forks" << " | "
@@ -182,33 +210,34 @@ int main(int argc, char **argv){
         waiting_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - state.became_hungry_at).count();
       }
 
-      std::cout << std::setw(4) << state.id << " | "
-        << std::setw(10) << StatusToString(state.status) << " | "
-        << std::setw(7) << forks_held << " | ";
+      std::cout << std::setw(4) << state.id << " | "; 
+      std::cout << std::setw(10) << StatusToString(state.status) << " | "; 
+      std::cout << std::setw(7) << forks_held << " | ";
+
       if (state.status == PhilosopherStatus::HUNGRY) {
         std::cout << waiting_ms;
       } else {
         std::cout << "-";
       }
-      std::cout << "\n";
+      std::cout << "\n"; 
     }
     state_lock.Unlock();
 
 
-    std::this_thread::sleep_for(std::chrono::milliseconds(150));
-  }
+    std::this_thread::sleep_for(std::chrono::milliseconds(150)); 
+  } 
 
   std::cout << "\n--- Simulation time ended ---\n";
   std::cout << "Stopping philosopher threads...\n";
-  running_flag.store(false);
+  running_flag.store(false); 
 
   std::cout << "Waiting for threads to join...\n";
-  for(std::thread &p_thread : philosophers) {
+  for(std::thread &p_thread : philosophers) { 
     if (p_thread.joinable()) {
       p_thread.join();
     }
   }
 
   std::cout << "All philosophers have finished. Exiting.\n";
-  return 0;
+  return 0; 
 }
