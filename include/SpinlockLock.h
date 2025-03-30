@@ -1,5 +1,4 @@
 #include <atomic>
-#include <thread>
 
 class SpinlockLock{
 private:
@@ -8,6 +7,6 @@ private:
 public:
   SpinlockLock() = default;
   ~SpinlockLock() = default;
-  void lock();
-  void unlock();
+  void Lock();
+  void Unlock();
 };

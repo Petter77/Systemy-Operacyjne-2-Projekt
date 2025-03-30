@@ -1,11 +1,12 @@
-#include "../include/SpinlockLock.hpp"
+#include "../include/SpinlockLock.h"
+#include <thread>
 
-void SpinlockLock::lock(){
+void SpinlockLock::Lock(){
   while(flag_.test_and_set(std::memory_order_acquire)){
     std::this_thread::yield();
   }
 }
 
-void SpinlockLock::unlock(){
+void SpinlockLock::Unlock(){
   flag_.clear(std::memory_order_release);
 }
