@@ -1,5 +1,3 @@
-// Copyright 2025 Patryk Pawlinski
-// Created for Wroclaw University of Science and Technology
 #include <iostream>
 #include <string>
 #include <cctype>
@@ -11,8 +9,7 @@
 #include <algorithm>
 #include <functional>
 #include <iomanip>
-
-#include "../include/spinlocklock.h"
+#include <mutex>
 
 const char kAnsiColorReset[]   = "\033[0m";
 const char kAnsiColorGreen[]   = "\033[32m";
@@ -54,11 +51,12 @@ std::string StatusToString(PhilosopherStatus status) {
   }
 }
 
-void PhilosophersLife(int id, int num_philosophers, std::vector<SpinlockLock>& forks,
+void PhilosophersLife(int id, int num_philosophers, std::vector<std::mutex>& forks,
                       std::atomic<bool>& running_flag, std::vector<PhilosopherState>& states,
-                      SpinlockLock& state_lock) {
+                      std::mutex& state_lock) {
   int left_fork_id = id;
   int right_fork_id = (id + 1) % num_philosophers;
+
   int first_fork_id = std::min(left_fork_id, right_fork_id);
   int second_fork_id = std::max(left_fork_id, right_fork_id);
 
@@ -67,64 +65,48 @@ void PhilosophersLife(int id, int num_philosophers, std::vector<SpinlockLock>& f
   std::uniform_int_distribution<int> dist(100, 1000);
 
   while (running_flag.load(std::memory_order_relaxed)) {
-    // THINKING
     {
-      state_lock.Lock();
+      std::lock_guard<std::mutex> lock(state_lock);
       states[id].status = PhilosopherStatus::THINKING;
-      state_lock.Unlock();
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(dist(gen)));
 
-    // HUNGRY
     {
-      state_lock.Lock();
+      std::lock_guard<std::mutex> lock(state_lock);
       states[id].status = PhilosopherStatus::HUNGRY;
       states[id].became_hungry_at = std::chrono::steady_clock::now();
-      state_lock.Unlock();
     }
 
-    // Grab first fork
-    forks[first_fork_id].Lock();
+    std::lock(forks[first_fork_id], forks[second_fork_id]);
+
+    std::lock_guard<std::mutex> first_fork_lock(forks[first_fork_id], std::adopt_lock);
+    std::lock_guard<std::mutex> second_fork_lock(forks[second_fork_id], std::adopt_lock);
+
     {
-      state_lock.Lock();
+      std::lock_guard<std::mutex> lock(state_lock);
       if (first_fork_id == left_fork_id) {
-        states[id].holding_left_fork = true;
+          states[id].holding_left_fork = true;
+          states[id].holding_right_fork = true;
       } else {
-        states[id].holding_right_fork = true;
-      }
-      state_lock.Unlock();
-    }
-
-    // Grab second fork -> EATING
-    forks[second_fork_id].Lock();
-    {
-      state_lock.Lock();
-      if (second_fork_id == left_fork_id) {
-        states[id].holding_left_fork = true;
-      } else {
-        states[id].holding_right_fork = true;
+          states[id].holding_right_fork = true;
+          states[id].holding_left_fork = true;
       }
       states[id].status = PhilosopherStatus::EATING;
-      state_lock.Unlock();
     }
 
-    // EATING
     std::this_thread::sleep_for(std::chrono::milliseconds(dist(gen)));
 
-    forks[second_fork_id].Unlock();
-    forks[first_fork_id].Unlock();
     {
-      state_lock.Lock();
+      std::lock_guard<std::mutex> lock(state_lock);
       states[id].holding_left_fork = false;
       states[id].holding_right_fork = false;
-      state_lock.Unlock();
     }
   }
 }
 
 
 void displayUI(const std::vector<PhilosopherState>& states,
-               SpinlockLock& state_lock,
+               std::mutex& state_lock,
                std::chrono::seconds total_duration,
                std::chrono::steady_clock::time_point start_time) {
   std::cout << kAnsiClearScreen;
@@ -141,7 +123,7 @@ void displayUI(const std::vector<PhilosopherState>& states,
     << "Waiting (ms)\n";
   std::cout << "--------------------------------------------------\n";
 
-  state_lock.Lock();
+  std::lock_guard<std::mutex> lock(state_lock);
   auto now = std::chrono::steady_clock::now();
   const int num_philosophers = states.size();
 
@@ -151,7 +133,7 @@ void displayUI(const std::vector<PhilosopherState>& states,
     forks_held += " ";
     forks_held += (state.holding_right_fork ? std::to_string((state.id + 1) % num_philosophers) : "-");
 
-    int16_t waiting_ms = 0;
+    long long waiting_ms = 0;
     if (state.status == PhilosopherStatus::HUNGRY) {
       waiting_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now - state.became_hungry_at).count();
     }
@@ -173,7 +155,6 @@ void displayUI(const std::vector<PhilosopherState>& states,
     }
     std::cout << "\n";
   }
-  state_lock.Unlock();
 }
 
 
@@ -213,12 +194,12 @@ int main(int argc, char **argv) {
   std::cout << "Initializing " << num_philosophers << " philosophers...\n";
   std::cout << "Simulation duration: " << simulation_duration_seconds << " seconds.\n";
 
-  std::vector<SpinlockLock> forks(num_philosophers);
+  std::vector<std::mutex> forks(num_philosophers);
   std::vector<PhilosopherState> philosopher_states(num_philosophers);
   for (int i = 0; i < num_philosophers; ++i) {
     philosopher_states[i].id = i;
   }
-  SpinlockLock state_lock;
+  std::mutex state_lock;
   std::atomic<bool> running_flag = true;
   std::vector<std::thread> philosophers;
   philosophers.reserve(num_philosophers);
